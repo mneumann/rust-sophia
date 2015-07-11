@@ -1,2 +1,4 @@
 # rust-sophia
-Rust bindings for the Sophia[http://sphia.org/] embedded database system.
+Rust bindings for the [Sophia][sophia] embedded database system.
+
+sophia: http://sphia.org/
