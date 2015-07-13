@@ -4,9 +4,18 @@ fn main() {
     env.setattr("sophia.path", "./storage");
     env.db("test");
     env.open();
+    let mut db = env.get_db("test").unwrap();
 
-    let mut db = env.get_db("db.test");
+    // Write keys
+    /*for i in 0 .. 10_000_000 {
+        let k = format!("{}", i);
+        let s = k.as_bytes();
+        db.set(s, s);
+    }
+    */
 
-    db.set(b"hallo", b"leute");
+    let val = String::from_utf8(db.get(b"104444").unwrap());
+    println!("{:?}", val);
+
     env.destroy();
 }

@@ -4,6 +4,7 @@ extern crate libc;
 
 use libc::{c_void, c_int, c_char};
 use std::ffi::CString;
+use std::slice;
 
 pub type Voidptr = *mut c_void;
 
@@ -22,7 +23,7 @@ extern {
     fn sp_setint(a: Voidptr, b: *const c_char, c: i64) -> c_int;
 
     fn sp_getobject(a: Voidptr, b: *const u8) -> Voidptr;
-    fn sp_getstring(a: Voidptr, b: *mut u8, c: *mut c_int) -> Voidptr;
+    fn sp_getstring(a: Voidptr, b: *const u8, c: *mut c_int) -> Voidptr;
     fn sp_getint(a: Voidptr, b: *mut u8) -> i64;
     fn sp_set(a: Voidptr, b: Voidptr) -> c_int;
     fn sp_update(a: Voidptr, b: Voidptr) -> c_int;
@@ -66,10 +67,18 @@ impl Env {
         unsafe {sp_getobject(self.env, attr.as_ptr() as *const u8)}
     }
 
-    pub fn get_db(&mut self, attr: &str) -> Db {
-        let attr = CString::new(attr).unwrap();
-        let db = unsafe {sp_getobject(self.env, attr.as_ptr() as *const u8)};
-        Db {db: db}
+    pub fn get_db(&mut self, dbname: &str) -> Option<Db> {
+        let dbstr = "db.".to_string() + dbname;
+        let attr = CString::new(&dbstr[..]).unwrap();
+        unsafe {
+            let obj = sp_getobject(self.env, attr.as_ptr() as *const u8);
+            if obj.is_null() {
+                None
+            }
+            else {
+                Some(Db {db: obj})
+            }
+        }
     }
 
 
@@ -84,7 +93,34 @@ impl Db {
     pub fn set(&mut self, key: &[u8], value: &[u8]) {
         unsafe {
             let mut o = sp_object(self.db);
-            sp_setstring(o, "key\0".as_ptr() as *const c_char, key.as_ptr() as Voidptr, key.len() as i32); 
+            sp_setstring(o, "key\0".as_ptr() as *const c_char, key.as_ptr() as Voidptr, key.len() as i32);
+            sp_setstring(o, "value\0".as_ptr() as *const c_char, value.as_ptr() as Voidptr, value.len() as i32);
+            sp_set(self.db, o);
+        }
+    }
+
+    // XXX: Return a value object
+    pub fn get(&mut self, key: &[u8]) -> Option<Vec<u8>> {
+        unsafe {
+            let mut o = sp_object(self.db);
+            sp_setstring(o, "key\0".as_ptr() as *const c_char, key.as_ptr() as Voidptr, key.len() as i32);
+            let mut o2 = sp_get(self.db, o);
+            if o2.is_null() {
+                return None;
+            }
+            let mut sz = 0;
+            let valptr = sp_getstring(o2, "value\0".as_ptr(), &mut sz);
+
+            // XXX: What if we have not stored a value?
+            if valptr.is_null() {
+                sp_destroy(o2);
+                return None;
+            }
+
+            let s = slice::from_raw_parts(valptr as *const u8, sz as usize);
+            let vec = s.to_vec();
+            sp_destroy(o2);
+            return Some(vec);
         }
     }
 }
