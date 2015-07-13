@@ -137,7 +137,7 @@ impl Db {
         }
     }
 
-    pub fn get(&mut self, key: &[u8]) -> Object {
+    pub fn get(&self, key: &[u8]) -> Object {
         unsafe {
             let o = sp_object(self.db);
             sp_setstring(o, "key\0".as_ptr() as *const c_char, key.as_ptr() as Voidptr, key.len() as i32);
