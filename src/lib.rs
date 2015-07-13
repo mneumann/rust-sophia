@@ -35,10 +35,12 @@ extern {
     fn sp_commit(a: Voidptr) -> c_int;
 }
 
+#[derive(Debug, Copy, Clone)]
 pub struct Env {
     env: Voidptr
 }
 
+#[derive(Debug, Copy, Clone)]
 pub struct Db {
     db: Voidptr
 }
