@@ -43,6 +43,8 @@ pub struct Db {
     db: Voidptr
 }
 
+unsafe impl Sync for Db {}
+
 impl Env {
     pub fn new() -> Env {
         Env {env: unsafe{sp_env()}}
