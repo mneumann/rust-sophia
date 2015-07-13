@@ -44,6 +44,7 @@ pub struct Db {
 }
 
 unsafe impl Sync for Db {}
+unsafe impl Send for Db {}
 
 impl Env {
     pub fn new() -> Env {
