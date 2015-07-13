@@ -8,7 +8,7 @@ use std::slice;
 
 pub type Voidptr = *mut c_void;
 
-#[link(name = "sophia")]
+#[link(name = "sophia", kind="static")]
 extern {
     fn sp_env() -> Voidptr;
     fn sp_object(a: Voidptr) -> Voidptr;
@@ -53,9 +53,8 @@ impl Env {
     }
 
     pub fn db(&mut self, dbname: &str) {
-        let db = CString::new("db").unwrap();
         let dbname = CString::new(dbname).unwrap();
-        unsafe {sp_setstring(self.env, db.as_ptr(), dbname.as_ptr() as *const c_void, 0) };
+        unsafe {sp_setstring(self.env, "db\0".as_ptr() as *const c_char, dbname.as_ptr() as *const c_void, 0) };
     }
 
     pub fn open(&mut self) {
@@ -81,46 +80,66 @@ impl Env {
         }
     }
 
-
     pub fn setattr(&mut self, key: &str, val: &str) {
         let key = CString::new(key).unwrap();
         let val = CString::new(val).unwrap();
         unsafe {sp_setstring(self.env, key.as_ptr(), val.as_ptr() as *const c_void, 0) };
+    }
+
+    pub fn setintattr(&mut self, key: &str, val: i64) {
+        let key = CString::new(key).unwrap();
+        unsafe {sp_setint(self.env, key.as_ptr(), val) };
+    }
+
+}
+
+pub struct Object {
+    obj: Voidptr
+}
+
+impl Object {
+    pub fn get_value<'a>(&'a mut self) -> Option<&'a[u8]> {
+        unsafe {
+            if self.obj.is_null() {
+                return None;
+            }
+            let mut sz = 0;
+            let valptr = sp_getstring(self.obj, "value\0".as_ptr(), &mut sz);
+
+            // XXX: what if we stored an empty value?
+            if valptr.is_null() {
+                return None;
+            }
+
+            let s = slice::from_raw_parts(valptr as *const u8, sz as usize);
+            return Some(s);
+        }
+    }
+}
+
+impl Drop for Object {
+    fn drop(&mut self) {
+        unsafe {sp_destroy(self.obj);}
     }
 }
 
 impl Db {
     pub fn set(&mut self, key: &[u8], value: &[u8]) {
         unsafe {
-            let mut o = sp_object(self.db);
+            let o = sp_object(self.db);
             sp_setstring(o, "key\0".as_ptr() as *const c_char, key.as_ptr() as Voidptr, key.len() as i32);
             sp_setstring(o, "value\0".as_ptr() as *const c_char, value.as_ptr() as Voidptr, value.len() as i32);
             sp_set(self.db, o);
+            sp_destroy(o);
         }
     }
 
-    // XXX: Return a value object
-    pub fn get(&mut self, key: &[u8]) -> Option<Vec<u8>> {
+    pub fn get(&mut self, key: &[u8]) -> Object {
         unsafe {
-            let mut o = sp_object(self.db);
+            let o = sp_object(self.db);
             sp_setstring(o, "key\0".as_ptr() as *const c_char, key.as_ptr() as Voidptr, key.len() as i32);
-            let mut o2 = sp_get(self.db, o);
-            if o2.is_null() {
-                return None;
-            }
-            let mut sz = 0;
-            let valptr = sp_getstring(o2, "value\0".as_ptr(), &mut sz);
-
-            // XXX: What if we have not stored a value?
-            if valptr.is_null() {
-                sp_destroy(o2);
-                return None;
-            }
-
-            let s = slice::from_raw_parts(valptr as *const u8, sz as usize);
-            let vec = s.to_vec();
-            sp_destroy(o2);
-            return Some(vec);
+            let o2 = sp_get(self.db, o);
+            return Object{obj: o2};
         }
     }
 }
