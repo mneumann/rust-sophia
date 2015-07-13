@@ -73,7 +73,7 @@ impl Env {
         unsafe {sp_getobject(self.env, attr.as_ptr() as *const u8)}
     }
 
-    pub fn get_db(&mut self, dbname: &str) -> Option<Db> {
+    pub fn get_db(&self, dbname: &str) -> Option<Db> {
         let dbstr = "db.".to_string() + dbname;
         let attr = CString::new(&dbstr[..]).unwrap();
         unsafe {
