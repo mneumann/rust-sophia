@@ -75,7 +75,7 @@ impl<'a> Drop for Transaction<'a> {
 }
 
 impl<'a> Transaction<'a> {
-    fn commit(mut self) -> i32 {
+    pub fn commit(mut self) -> i32 {
         let rc = unsafe{ffi::sp_commit(self.tx)};
         self.tx = ptr::null_mut();
         rc as i32
