@@ -3,6 +3,7 @@
 extern crate libc;
 use std::ffi::CString;
 use std::slice;
+use std::ptr;
 
 mod ffi;
 
@@ -72,7 +73,6 @@ impl Env {
         let key = CString::new(key).unwrap();
         unsafe {ffi::sp_setint(self.env, key.as_ptr(), val) };
     }
-
 }
 
 pub struct Object<'a> {
@@ -103,6 +103,56 @@ impl<'a> Drop for Object<'a> {
     }
 }
 
+pub struct Cursor {
+    obj: ffi::Voidptr,
+}
+
+pub struct CursorObject<'a> {
+    obj: ffi::Voidptr,
+    cur: &'a Cursor
+}
+
+impl<'a> CursorObject<'a> {
+    pub fn get_value<'b>(&'b mut self) -> Option<&'b[u8]> {
+        unsafe {
+            let mut sz = 0;
+            let valptr = ffi::sp_getstring(self.obj, "value\0".as_ptr(), &mut sz);
+
+            // XXX: what if we stored an empty value?
+            if valptr.is_null() {
+                return None;
+            }
+
+            let s = slice::from_raw_parts(valptr as *const u8, sz as usize);
+            return Some(s);
+        }
+    }
+}
+
+impl<'a> Drop for CursorObject<'a> {
+    fn drop(&mut self) {
+        unsafe {ffi::sp_destroy(self.obj);}
+    }
+}
+
+impl Drop for Cursor {
+    fn drop(&mut self) {
+        unsafe {ffi::sp_destroy(self.obj);}
+    }
+}
+
+impl Cursor {
+    fn next<'a>(&'a self) -> Option<CursorObject<'a>> {
+        let res = unsafe { ffi::sp_get(self.obj, ptr::null_mut()) };
+        if res.is_null() {
+            None
+        }
+        else {
+            Some(CursorObject{obj: res, cur: &self})
+        }
+    }
+}
+
 impl Db {
     pub fn set(&mut self, key: &[u8], value: &[u8]) {
         unsafe {
@@ -116,7 +166,19 @@ impl Db {
         }
     }
 
+    pub fn iter_all(&mut self) -> Cursor {
+        unsafe {
+            let obj = ffi::sp_object(self.db);
+            assert!(!obj.is_null());
+            ffi::setstring(obj, "order\0".as_bytes(), ">=\0".as_bytes(), 0);
+            let cursor = ffi::sp_cursor(self.db, obj);
+            assert!(!cursor.is_null());
+            Cursor {obj: cursor}
+        }
+    }
+
     pub fn get<'a>(&self, key: &'a [u8]) -> Option<Object<'a>> {
+        assert!(key.len() > 0);
         unsafe {
             let pattern = ffi::sp_object(self.db);
             if pattern.is_null() {
