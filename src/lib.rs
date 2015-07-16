@@ -25,6 +25,21 @@ unsafe impl Send for Env {}
 
 use std::marker::PhantomData;
 
+#[macro_export]
+macro_rules! obj {
+    (
+        $db:ident,
+        $(
+            $name:ident => $x:expr
+        ),*
+    ) => {{
+        let mut obj = $db.obj(); 
+        $(
+            obj.$name($x)
+        );* ;
+        obj
+    }}
+}
 
 #[derive(Debug)]
 pub struct DbObject<'a> {

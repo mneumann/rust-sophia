@@ -1,3 +1,4 @@
+#[macro_use(obj)]
 extern crate sophia;
 extern crate rand;
 
@@ -7,16 +8,13 @@ use std::thread;
 const N_KEYS: usize = 100_000_000;
 const REPEAT: usize = 10_000_000;
 
+
 fn write_keys(db: &mut sophia::Db) {
     for i in 0 .. N_KEYS {
         let k = format!("{}", i);
         let s = k.as_bytes();
 
-        let mut obj = db.obj();
-        obj.key(s);
-        obj.value(s);
-
-        db.set(obj);
+        db.set(obj!(db, key => s, value => s));
     }
 }
 
