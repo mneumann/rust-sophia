@@ -87,6 +87,19 @@ impl<'a> Transaction<'a> {
         unsafe {ffi::sp_set(self.tx, obj.o)}; // XXX: Check error code
         obj.o = ptr::null_mut(); // sp_set drops it
     }
+
+    // XXX: Make sure self.db == dbobject.db
+    pub fn get_<'b>(&'b self, pattern: DbObject<'b>) -> Option<DbObject<'b>> {
+        unsafe {
+            let res = ffi::sp_get(self.tx, pattern.o);
+            if res.is_null() {
+                return None;
+            }
+            let mut pattern = pattern;
+            pattern.o = res; 
+            return Some(pattern);
+        }
+    }
 }
 
 impl Env {
