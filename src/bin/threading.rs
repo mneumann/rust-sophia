@@ -11,7 +11,12 @@ fn write_keys(db: &mut sophia::Db) {
     for i in 0 .. N_KEYS {
         let k = format!("{}", i);
         let s = k.as_bytes();
-        db.set(s, s);
+
+        let mut obj = db.obj();
+        obj.key(s);
+        obj.value(s);
+
+        db.set(obj);
     }
 }
 
@@ -23,8 +28,11 @@ fn read_keys(db: &mut sophia::Db) {
         let i: usize = rng.gen();
         let key = format!("{}", i % N_KEYS);
 
-        let mut obj = db.get(key.as_bytes()).unwrap();
-        match obj.get_value() {
+        let mut obj = db.obj();
+        obj.key(key.as_bytes());
+
+        let kv = db.get(obj).unwrap();
+        match kv.get_value() {
             Some(val) => {
                 if let Ok(val) = str::from_utf8(val) {
                     assert!(val == key);
@@ -56,7 +64,7 @@ fn main() {
     for i in 1..10 {
         let child = thread::spawn(move || {
             let mut mydb = db.clone();
-            test_keys(&mut mydb);
+            read_keys(&mut mydb);
         });
         vec.push(child);
     }

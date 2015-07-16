@@ -48,6 +48,22 @@ impl<'a> DbObject<'a> {
     pub fn value<'b>(&'b mut self, data: &'b[u8]) {
         unsafe {ffi::setstring(self.o, "value\0".as_bytes(), data); }
     }
+
+    pub fn get_value<'b>(&'b self) -> Option<&'b[u8]> {
+        unsafe {
+            let mut sz = 0;
+            let valptr = ffi::sp_getstring(self.o, "value\0".as_ptr(), &mut sz);
+
+            // XXX: what if we stored an empty value?
+            if valptr.is_null() {
+                return None;
+            }
+
+            let s = slice::from_raw_parts(valptr as *const u8, sz as usize);
+            return Some(s);
+        }
+    }
+
 }
 
 impl<'a> Drop for DbObject<'a> {
@@ -57,7 +73,6 @@ impl<'a> Drop for DbObject<'a> {
         }
     }
 }
-
 
 #[derive(Debug)]
 pub struct Transaction<'a> {
@@ -82,14 +97,13 @@ impl<'a> Transaction<'a> {
     }
 
     // Consumes the DbObject
-    pub fn put<'b>(&mut self, obj: DbObject<'b>) {
+    pub fn set<'b>(&mut self, obj: DbObject<'b>) {
         let mut obj = obj;
         unsafe {ffi::sp_set(self.tx, obj.o)}; // XXX: Check error code
         obj.o = ptr::null_mut(); // sp_set drops it
     }
 
-    // XXX: Make sure self.db == dbobject.db
-    pub fn get_<'b>(&'b self, pattern: DbObject<'b>) -> Option<DbObject<'b>> {
+    pub fn get<'b>(&'b self, pattern: DbObject<'b>) -> Option<DbObject<'b>> {
         unsafe {
             let res = ffi::sp_get(self.tx, pattern.o);
             if res.is_null() {
@@ -120,7 +134,6 @@ impl Env {
     pub fn open(&mut self) {
         unsafe {ffi::sp_open(self.env)};
     }
-
     
     pub fn begin<'a>(&'a self) -> Transaction<'a> {
         let tx = unsafe{ffi::sp_begin(self.env)};
@@ -130,13 +143,6 @@ impl Env {
             phantom: PhantomData
         }
     }
-
-    /*
-    fn get_object(&mut self, attr: &str) -> Voidptr {
-        let attr = CString::new(attr).unwrap();
-        unsafe {ffi::sp_getobject(self.env, attr.as_ptr() as *const u8)}
-    }
-    */
 
     pub fn get_db(&self, dbname: &str) -> Option<Db> {
         let dbstr = "db.".to_string() + dbname;
@@ -161,34 +167,6 @@ impl Env {
     pub fn setintattr(&mut self, key: &str, val: i64) {
         let key = CString::new(key).unwrap();
         unsafe {ffi::sp_setint(self.env, key.as_ptr(), val) };
-    }
-}
-
-pub struct Object<'a> {
-    obj: ffi::Voidptr,
-    key: &'a [u8]
-}
-
-impl<'a> Object<'a> {
-    pub fn get_value<'b>(&'b mut self) -> Option<&'b[u8]> {
-        unsafe {
-            let mut sz = 0;
-            let valptr = ffi::sp_getstring(self.obj, "value\0".as_ptr(), &mut sz);
-
-            // XXX: what if we stored an empty value?
-            if valptr.is_null() {
-                return None;
-            }
-
-            let s = slice::from_raw_parts(valptr as *const u8, sz as usize);
-            return Some(s);
-        }
-    }
-}
-
-impl<'a> Drop for Object<'a> {
-    fn drop(&mut self) {
-        unsafe {ffi::sp_destroy(self.obj);}
     }
 }
 
@@ -264,14 +242,14 @@ impl Db {
     }
 
     // Consumes the DbObject
-    pub fn put<'a>(&mut self, obj: DbObject<'a>) {
+    pub fn set<'a>(&self, obj: DbObject<'a>) {
         let mut obj = obj;
         unsafe {ffi::sp_set(self.db, obj.o)}; // XXX: Check error code
         obj.o = ptr::null_mut(); // sp_set drops it
     }
 
     // XXX: Make sure self.db == dbobject.db
-    pub fn get_<'a>(&'a self, pattern: DbObject<'a>) -> Option<DbObject<'a>> {
+    pub fn get<'a>(&'a self, pattern: DbObject<'a>) -> Option<DbObject<'a>> {
         unsafe {
             let res = ffi::sp_get(self.db, pattern.o);
             if res.is_null() {
@@ -280,18 +258,6 @@ impl Db {
             let mut pattern = pattern;
             pattern.o = res; 
             return Some(pattern);
-        }
-    }
-
-    pub fn set(&mut self, key: &[u8], value: &[u8]) {
-        unsafe {
-            //ffi::sp_set_kv(self.db, key.as_ptr(), key.len() as i32, value.as_ptr(), value.len() as i32);
-            let obj = ffi::sp_object(self.db);
-            assert!(!obj.is_null());
-            ffi::setkey(obj, key);
-            ffi::setvalue(obj, value);
-            ffi::sp_set(self.db, obj);
-            //ffi::sp_destroy(obj);
         }
     }
 
@@ -306,24 +272,7 @@ impl Db {
         }
     }
 
-    pub fn get<'a>(&self, key: &'a [u8]) -> Option<Object<'a>> {
-        assert!(key.len() > 0);
-        unsafe {
-            let pattern = ffi::sp_object(self.db);
-            if pattern.is_null() {
-                // XXX: Return Err
-                return None;
-            }
-            ffi::setkey(pattern, key);
-            let res = ffi::sp_get(self.db, pattern);
-            if res.is_null() {
-                ffi::sp_destroy(pattern);
-                return None;
-            }
-            return Some(Object{obj: res, key: key});
-        }
-    }
-
+    /*
     // XXX: Cannot distinguish between key not found and no value.
     pub fn get_value(&self, key: &[u8]) -> Option<Vec<u8>> {
         match self.get(key) {
@@ -336,4 +285,5 @@ impl Db {
             }
         }
     }
+    */
 }
