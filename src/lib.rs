@@ -23,6 +23,72 @@ unsafe impl Send for Db {}
 unsafe impl Sync for Env {}
 unsafe impl Send for Env {}
 
+use std::marker::PhantomData;
+
+
+#[derive(Debug)]
+pub struct DbObject<'a> {
+    o: ffi::Voidptr,
+    phantom: PhantomData<&'a ()>
+}
+
+impl<'a> DbObject<'a> {
+    // We name it attr(), to not mix it up with the set() method.
+    pub fn attr<'b>(&'b mut self, path: &str, data: &'b[u8]) {
+        let path = CString::new(path).unwrap();
+        unsafe {ffi::setstring(self.o, path.as_bytes(), data); }
+    }
+
+    // Shortcut for attr("key", ...)
+    pub fn key<'b>(&'b mut self, data: &'b[u8]) {
+        unsafe {ffi::setstring(self.o, "key\0".as_bytes(), data); }
+    }
+
+    // Shortcut for attr("value", ...)
+    pub fn value<'b>(&'b mut self, data: &'b[u8]) {
+        unsafe {ffi::setstring(self.o, "value\0".as_bytes(), data); }
+    }
+}
+
+impl<'a> Drop for DbObject<'a> {
+    fn drop(&mut self) {
+        if !self.o.is_null() {
+            unsafe {ffi::sp_destroy(self.o)};
+        }
+    }
+}
+
+
+#[derive(Debug)]
+pub struct Transaction<'a> {
+    tx: ffi::Voidptr,
+    phantom: PhantomData<&'a ()>
+}
+
+impl<'a> Drop for Transaction<'a> {
+    // Unless commit() is called, this will roll back the transaction
+    fn drop(&mut self) {
+        if !self.tx.is_null() {
+            unsafe {ffi::sp_destroy(self.tx);}
+        }
+    }
+}
+
+impl<'a> Transaction<'a> {
+    fn commit(mut self) -> i32 {
+        let rc = unsafe{ffi::sp_commit(self.tx)};
+        self.tx = ptr::null_mut();
+        rc as i32
+    }
+
+    // Consumes the DbObject
+    pub fn put<'b>(&mut self, obj: DbObject<'b>) {
+        let mut obj = obj;
+        unsafe {ffi::sp_set(self.tx, obj.o)}; // XXX: Check error code
+        obj.o = ptr::null_mut(); // sp_set drops it
+    }
+}
+
 impl Env {
     pub fn new() -> Env {
         Env {env: unsafe{ffi::sp_env()}}
@@ -35,11 +101,21 @@ impl Env {
     pub fn db(&mut self, dbname: &str) {
         // XXX: is dbname copied?
         let dbname = CString::new(dbname).unwrap();
-        unsafe {ffi::setstring(self.env, "db\0".as_bytes(), dbname.as_bytes(), 0) };
+        unsafe {ffi::setstring(self.env, "db\0".as_bytes(), dbname.as_bytes()) };
     }
 
     pub fn open(&mut self) {
         unsafe {ffi::sp_open(self.env)};
+    }
+
+    
+    pub fn begin<'a>(&'a self) -> Transaction<'a> {
+        let tx = unsafe{ffi::sp_begin(self.env)};
+        assert!(!tx.is_null());
+        Transaction {
+            tx: tx,
+            phantom: PhantomData
+        }
     }
 
     /*
@@ -66,7 +142,7 @@ impl Env {
     pub fn setattr(&mut self, key: &str, val: &str) {
         let key = CString::new(key).unwrap();
         let val = CString::new(val).unwrap();
-        unsafe {ffi::setstring(self.env, key.as_bytes(), val.as_bytes(), 0) };
+        unsafe {ffi::setstring(self.env, key.as_bytes(), val.as_bytes()) };
     }
 
     pub fn setintattr(&mut self, key: &str, val: i64) {
@@ -168,6 +244,32 @@ impl Cursor {
 }
 
 impl Db {
+    pub fn obj<'a>(&'a self) -> DbObject<'a> {
+        let obj = unsafe { ffi::sp_object(self.db) };
+        assert!(!obj.is_null());
+        DbObject{o: obj, phantom: PhantomData} 
+    }
+
+    // Consumes the DbObject
+    pub fn put<'a>(&mut self, obj: DbObject<'a>) {
+        let mut obj = obj;
+        unsafe {ffi::sp_set(self.db, obj.o)}; // XXX: Check error code
+        obj.o = ptr::null_mut(); // sp_set drops it
+    }
+
+    // XXX: Make sure self.db == dbobject.db
+    pub fn get_<'a>(&'a self, pattern: DbObject<'a>) -> Option<DbObject<'a>> {
+        unsafe {
+            let res = ffi::sp_get(self.db, pattern.o);
+            if res.is_null() {
+                return None;
+            }
+            let mut pattern = pattern;
+            pattern.o = res; 
+            return Some(pattern);
+        }
+    }
+
     pub fn set(&mut self, key: &[u8], value: &[u8]) {
         unsafe {
             //ffi::sp_set_kv(self.db, key.as_ptr(), key.len() as i32, value.as_ptr(), value.len() as i32);
@@ -176,7 +278,7 @@ impl Db {
             ffi::setkey(obj, key);
             ffi::setvalue(obj, value);
             ffi::sp_set(self.db, obj);
-            ffi::sp_destroy(obj);
+            //ffi::sp_destroy(obj);
         }
     }
 
@@ -184,7 +286,7 @@ impl Db {
         unsafe {
             let obj = ffi::sp_object(self.db);
             assert!(!obj.is_null());
-            ffi::setstring(obj, "order\0".as_bytes(), ">=\0".as_bytes(), 0);
+            ffi::setstring(obj, "order\0".as_bytes(), ">=".as_bytes());
             let cursor = ffi::sp_cursor(self.db, obj);
             assert!(!cursor.is_null());
             Cursor {obj: cursor}

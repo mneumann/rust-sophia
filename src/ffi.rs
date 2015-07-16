@@ -33,16 +33,17 @@ extern {
 
 // NOTE: `b' must be NUL terminated string.
 #[inline(always)]
-pub fn setstring(a: Voidptr, b: &[u8], c: &[u8], d: c_int) -> c_int {
-    unsafe { sp_setstring(a, b.as_ptr() as *const c_char, c.as_ptr() as *const c_void, d) }
+pub fn setstring(a: Voidptr, b: &[u8], c: &[u8]) -> c_int {
+    assert!(c.len() > 0);
+    unsafe { sp_setstring(a, b.as_ptr() as *const c_char, c.as_ptr() as *const c_void, c.len() as i32) }
 }
 
 #[inline(always)]
 pub fn setkey(o: Voidptr, key: &[u8]) -> c_int {
-    setstring(o, "key\0".as_bytes(), key, key.len() as i32)
+    setstring(o, "key\0".as_bytes(), key)
 }
 
 #[inline(always)]
 pub fn setvalue(o: Voidptr, value: &[u8]) -> c_int {
-    setstring(o, "value\0".as_bytes(), value, value.len() as i32)
+    setstring(o, "value\0".as_bytes(), value)
 }
