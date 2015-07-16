@@ -208,4 +208,17 @@ impl Db {
             return Some(Object{obj: res, key: key});
         }
     }
+
+    // XXX: Cannot distinguish between key not found and no value.
+    pub fn get_value(&self, key: &[u8]) -> Option<Vec<u8>> {
+        match self.get(key) {
+            None => None,
+            Some(mut valobj) => {
+                match valobj.get_value() {
+                    Some(val) => Some(val.to_vec()),
+                    None => None
+                }
+            }
+        }
+    }
 }
