@@ -10,7 +10,6 @@ fn main() {
 
     let dst = env::var("OUT_DIR").unwrap();
     fs::copy("sophia/libsophia.a", Path::new(&dst).join("libsophia.a")).unwrap();
-
     println!("cargo:rustc-link-search=native={}", dst);
     println!("cargo:rustc-link-lib=static=sophia");
 }

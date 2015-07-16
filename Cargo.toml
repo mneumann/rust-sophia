@@ -3,3 +3,7 @@ name = "sophia"
 version = "0.1.0"
 authors = ["Michael Neumann <mneumann@ntecs.de>"]
 build = "build.rs"
+
+[dependencies]
+
+rand = "*"
