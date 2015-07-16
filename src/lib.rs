@@ -156,7 +156,7 @@ impl Drop for Cursor {
 }
 
 impl Cursor {
-    fn next<'a>(&'a self) -> Option<CursorObject<'a>> {
+    pub fn next<'a>(&'a self) -> Option<CursorObject<'a>> {
         let res = unsafe { ffi::sp_get(self.obj, ptr::null_mut()) };
         if res.is_null() {
             None
