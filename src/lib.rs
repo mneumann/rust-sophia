@@ -113,6 +113,20 @@ pub struct CursorObject<'a> {
 }
 
 impl<'a> CursorObject<'a> {
+    pub fn get_key<'b>(&'b mut self) -> Option<&'b[u8]> {
+        unsafe {
+            let mut sz = 0;
+            let keyptr = ffi::sp_getstring(self.obj, "key\0".as_ptr(), &mut sz);
+
+            if keyptr.is_null() {
+                return None;
+            }
+
+            let s = slice::from_raw_parts(keyptr as *const u8, sz as usize);
+            return Some(s);
+        }
+    }
+
     pub fn get_value<'b>(&'b mut self) -> Option<&'b[u8]> {
         unsafe {
             let mut sz = 0;
