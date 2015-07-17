@@ -84,7 +84,6 @@ impl<'a> DbObject<'a> {
             return Some(s);
         }
     }
-
 }
 
 impl<'a> Drop for DbObject<'a> {
@@ -181,8 +180,6 @@ impl<'a> Transaction<'a> {
 impl<'a> SetGetOps for Transaction<'a> {
     fn backend(&self) -> ffi::Voidptr { self.tx }
 }
-
-
 
 impl Env {
     pub fn new() -> Env {
@@ -325,4 +322,6 @@ impl Db {
     }
 }
 
-
+impl SetGetOps for Db {
+    fn backend(&self) -> ffi::Voidptr { self.db }
+}
