@@ -321,7 +321,3 @@ impl Db {
         }
     }
 }
-
-impl SetGetOps for Db {
-    fn backend(&self) -> ffi::Voidptr { self.db }
-}
