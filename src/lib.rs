@@ -69,20 +69,15 @@ impl<'a> DbObject<'a> {
     pub fn val<'b>(&'b mut self, data: &'b[u8]) {
         self.value(data)
     }
+ 
+    // Shortcut for attr("order", ...)
+    pub fn order<'b>(&'b mut self, data: &'b[u8]) {
+        unsafe {ffi::setstring(self.o, "order\0".as_bytes(), data); }
+    }
 
-    pub fn get_value<'b>(&'b self) -> Option<&'b[u8]> {
-        unsafe {
-            let mut sz = 0;
-            let valptr = ffi::sp_getstring(self.o, "value\0".as_ptr(), &mut sz);
-
-            // XXX: what if we stored an empty value?
-            if valptr.is_null() {
-                return None;
-            }
-
-            let s = slice::from_raw_parts(valptr as *const u8, sz as usize);
-            return Some(s);
-        }
+    // Shortcut for attr("prefix", ...)
+    pub fn prefix<'b>(&'b mut self, data: &'b[u8]) {
+        unsafe {ffi::setstring(self.o, "prefix\0".as_bytes(), data); }
     }
 }
 
@@ -94,7 +89,6 @@ impl<'a> Drop for DbObject<'a> {
     }
 }
 
-
 #[derive(Debug)]
 pub struct DbResultObject<'a> {
     o: ffi::Voidptr,
@@ -102,10 +96,10 @@ pub struct DbResultObject<'a> {
 }
 
 impl<'a> DbResultObject<'a> {
-    pub fn get_value<'b>(&'b self) -> Option<&'b[u8]> {
+    fn get_<'b>(&'b self, key: &'b [u8]) -> Option<&'b[u8]> {
         unsafe {
             let mut sz = 0;
-            let valptr = ffi::sp_getstring(self.o, "value\0".as_ptr(), &mut sz);
+            let valptr = ffi::sp_getstring(self.o, key.as_ptr(), &mut sz);
 
             // XXX: what if we stored an empty value?
             if valptr.is_null() {
@@ -115,6 +109,14 @@ impl<'a> DbResultObject<'a> {
             let s = slice::from_raw_parts(valptr as *const u8, sz as usize);
             return Some(s);
         }
+
+    }
+    pub fn get_value<'b>(&'b self) -> Option<&'b[u8]> {
+        self.get_(b"value\0")
+    }
+
+    pub fn get_key<'b>(&'b self) -> Option<&'b[u8]> {
+        self.get_(b"key\0")
     }
 }
 
@@ -137,6 +139,29 @@ impl<'a> Drop for Transaction<'a> {
     fn drop(&mut self) {
         if !self.tx.is_null() {
             unsafe {ffi::sp_destroy(self.tx);}
+        }
+    }
+}
+
+pub struct Cursor<'a> {
+    obj: ffi::Voidptr,
+    phantom: PhantomData<&'a ()>
+}
+
+impl<'a> Drop for Cursor<'a> {
+    fn drop(&mut self) {
+        unsafe {ffi::sp_destroy(self.obj);}
+    }
+}
+
+impl<'a> Cursor<'a> {
+    pub fn next<'b>(&'b self) -> Option<DbResultObject<'b>> {
+        let res = unsafe { ffi::sp_get(self.obj, ptr::null_mut()) };
+        if res.is_null() {
+            None
+        }
+        else {
+            Some(DbResultObject{o: res, phantom: PhantomData})
         }
     }
 }
@@ -165,6 +190,19 @@ pub trait SetGetOps {
             let mut pattern = pattern;
             pattern.o = ptr::null_mut(); 
             return Some(n);
+        }
+    }
+
+    fn cursor<'a, 'b>(&'a self, pattern: DbObject<'b>) -> Cursor<'a> {
+        unsafe {
+            let cursor = ffi::sp_cursor(self.backend(), pattern.o);
+            assert!(!cursor.is_null());
+
+            // pattern is freed as part of the Cursor
+            let mut pattern = pattern;
+            pattern.o = ptr::null_mut();
+
+            Cursor {obj: cursor, phantom: PhantomData}
         }
     }
 }
@@ -239,69 +277,6 @@ impl SetGetOps for Env {
     fn backend(&self) -> ffi::Voidptr { self.env }
 }
 
-pub struct Cursor {
-    obj: ffi::Voidptr,
-}
-
-pub struct CursorObject<'a> {
-    obj: ffi::Voidptr,
-    cur: &'a Cursor
-}
-
-impl<'a> CursorObject<'a> {
-    pub fn get_key<'b>(&'b mut self) -> Option<&'b[u8]> {
-        unsafe {
-            let mut sz = 0;
-            let keyptr = ffi::sp_getstring(self.obj, "key\0".as_ptr(), &mut sz);
-
-            if keyptr.is_null() {
-                return None;
-            }
-
-            let s = slice::from_raw_parts(keyptr as *const u8, sz as usize);
-            return Some(s);
-        }
-    }
-
-    pub fn get_value<'b>(&'b mut self) -> Option<&'b[u8]> {
-        unsafe {
-            let mut sz = 0;
-            let valptr = ffi::sp_getstring(self.obj, "value\0".as_ptr(), &mut sz);
-
-            // XXX: what if we stored an empty value?
-            if valptr.is_null() {
-                return None;
-            }
-
-            let s = slice::from_raw_parts(valptr as *const u8, sz as usize);
-            return Some(s);
-        }
-    }
-}
-
-impl<'a> Drop for CursorObject<'a> {
-    fn drop(&mut self) {
-        unsafe {ffi::sp_destroy(self.obj);}
-    }
-}
-
-impl Drop for Cursor {
-    fn drop(&mut self) {
-        unsafe {ffi::sp_destroy(self.obj);}
-    }
-}
-
-impl Cursor {
-    pub fn next<'a>(&'a self) -> Option<CursorObject<'a>> {
-        let res = unsafe { ffi::sp_get(self.obj, ptr::null_mut()) };
-        if res.is_null() {
-            None
-        }
-        else {
-            Some(CursorObject{obj: res, cur: &self})
-        }
-    }
-}
 
 impl Db {
     pub fn obj<'a>(&'a self) -> DbObject<'a> {
@@ -310,14 +285,4 @@ impl Db {
         DbObject{o: obj, phantom: PhantomData} 
     }
 
-    pub fn iter_all(&mut self) -> Cursor {
-        unsafe {
-            let obj = ffi::sp_object(self.db);
-            assert!(!obj.is_null());
-            ffi::setstring(obj, "order\0".as_bytes(), ">=".as_bytes());
-            let cursor = ffi::sp_cursor(self.db, obj);
-            assert!(!cursor.is_null());
-            Cursor {obj: cursor}
-        }
-    }
 }
