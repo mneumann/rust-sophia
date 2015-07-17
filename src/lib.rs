@@ -44,7 +44,7 @@ macro_rules! obj {
 #[derive(Debug)]
 pub struct DbObject<'a> {
     o: ffi::Voidptr,
-    phantom: PhantomData<&'a ()>
+    phantom: PhantomData<&'a ()>,
 }
 
 impl<'a> DbObject<'a> {
@@ -89,6 +89,38 @@ impl<'a> Drop for DbObject<'a> {
     }
 }
 
+
+#[derive(Debug)]
+pub struct DbResultObject<'a> {
+    o: ffi::Voidptr,
+    phantom: PhantomData<&'a ()>,
+}
+
+impl<'a> DbResultObject<'a> {
+    pub fn get_value<'b>(&'b self) -> Option<&'b[u8]> {
+        unsafe {
+            let mut sz = 0;
+            let valptr = ffi::sp_getstring(self.o, "value\0".as_ptr(), &mut sz);
+
+            // XXX: what if we stored an empty value?
+            if valptr.is_null() {
+                return None;
+            }
+
+            let s = slice::from_raw_parts(valptr as *const u8, sz as usize);
+            return Some(s);
+        }
+    }
+}
+
+impl<'a> Drop for DbResultObject<'a> {
+    fn drop(&mut self) {
+        if !self.o.is_null() {
+            unsafe {ffi::sp_destroy(self.o)};
+        }
+    }
+}
+
 #[derive(Debug)]
 pub struct Transaction<'a> {
     tx: ffi::Voidptr,
@@ -118,15 +150,19 @@ impl<'a> Transaction<'a> {
         obj.o = ptr::null_mut(); // sp_set drops it
     }
 
-    pub fn get<'b>(&'b self, pattern: DbObject<'b>) -> Option<DbObject<'b>> {
+    pub fn get<'b>(&'b self, pattern: DbObject<'b>) -> Option<DbResultObject<'b>> {
         unsafe {
             let res = ffi::sp_get(self.tx, pattern.o);
             if res.is_null() {
                 return None;
             }
+            let n = DbResultObject {
+                o: pattern.o,
+                phantom: PhantomData
+            };
             let mut pattern = pattern;
-            pattern.o = res; 
-            return Some(pattern);
+            pattern.o = ptr::null_mut(); 
+            return Some(n);
         }
     }
 }
@@ -264,15 +300,19 @@ impl Db {
     }
 
     // XXX: Make sure self.db == dbobject.db
-    pub fn get<'a>(&'a self, pattern: DbObject<'a>) -> Option<DbObject<'a>> {
+    pub fn get<'a, 'b>(&'a self, pattern: DbObject<'b>) -> Option<DbResultObject<'a>> {
         unsafe {
             let res = ffi::sp_get(self.db, pattern.o);
             if res.is_null() {
                 return None;
             }
+            let n = DbResultObject {
+                o: pattern.o,
+                phantom: PhantomData
+            };
             let mut pattern = pattern;
-            pattern.o = res; 
-            return Some(pattern);
+            pattern.o = ptr::null_mut(); 
+            return Some(n);
         }
     }
 
