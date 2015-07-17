@@ -273,10 +273,9 @@ impl Env {
     }
 }
 
-impl SetGetOps for Env {
-    fn backend(&self) -> ffi::Voidptr { self.env }
+impl SetGetOps for Db {
+    fn backend(&self) -> ffi::Voidptr { self.db }
 }
-
 
 impl Db {
     pub fn obj<'a>(&'a self) -> DbObject<'a> {

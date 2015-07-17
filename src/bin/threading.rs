@@ -16,7 +16,7 @@ fn write_keys(env: &sophia::Env, db: &sophia::Db) {
         let s = k.as_bytes();
 
         let obj = obj![db; key:s, val:s];
-        env.set(obj);
+        db.set(obj);
     }
 }
 
@@ -30,7 +30,7 @@ fn read_keys(env: &sophia::Env, db: &sophia::Db) {
 
         let obj = obj![db; key : key.as_bytes()];
 
-        let kv = env.get(obj).unwrap();
+        let kv = db.get(obj).unwrap();
         match kv.get_value() {
             Some(val) => {
                 if let Ok(val) = str::from_utf8(val) {
@@ -60,7 +60,7 @@ fn main() {
 
     let mut vec = vec![];
 
-    for i in 1..10 {
+    for _ in 1..10 {
         let child = thread::spawn(move || {
             read_keys(&env, &db);
         });
