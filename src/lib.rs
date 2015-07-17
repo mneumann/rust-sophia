@@ -136,23 +136,20 @@ impl<'a> Drop for Transaction<'a> {
     }
 }
 
-impl<'a> Transaction<'a> {
-    pub fn commit(mut self) -> i32 {
-        let rc = unsafe{ffi::sp_commit(self.tx)};
-        self.tx = ptr::null_mut();
-        rc as i32
-    }
+pub trait SetGetOps {
+    fn backend(&self) -> ffi::Voidptr;
 
     // Consumes the DbObject
-    pub fn set<'b>(&mut self, obj: DbObject<'b>) {
+    fn set<'a>(&self, obj: DbObject<'a>) {
         let mut obj = obj;
-        unsafe {ffi::sp_set(self.tx, obj.o)}; // XXX: Check error code
+        unsafe {ffi::sp_set(self.backend(), obj.o)}; // XXX: Check error code
         obj.o = ptr::null_mut(); // sp_set drops it
     }
 
-    pub fn get<'b>(&'b self, pattern: DbObject<'b>) -> Option<DbResultObject<'b>> {
+    // XXX: Make sure self.db == dbobject.db
+    fn get<'a, 'b>(&'a self, pattern: DbObject<'b>) -> Option<DbResultObject<'a>> {
         unsafe {
-            let res = ffi::sp_get(self.tx, pattern.o);
+            let res = ffi::sp_get(self.backend(), pattern.o);
             if res.is_null() {
                 return None;
             }
@@ -166,6 +163,20 @@ impl<'a> Transaction<'a> {
         }
     }
 }
+
+impl<'a> Transaction<'a> {
+    pub fn commit(mut self) -> i32 {
+        let rc = unsafe{ffi::sp_commit(self.tx)};
+        self.tx = ptr::null_mut();
+        rc as i32
+    }
+}
+
+impl<'a> SetGetOps for Transaction<'a> {
+    fn backend(&self) -> ffi::Voidptr { self.tx }
+}
+
+
 
 impl Env {
     pub fn new() -> Env {
@@ -292,30 +303,6 @@ impl Db {
         DbObject{o: obj, phantom: PhantomData} 
     }
 
-    // Consumes the DbObject
-    pub fn set<'a>(&self, obj: DbObject<'a>) {
-        let mut obj = obj;
-        unsafe {ffi::sp_set(self.db, obj.o)}; // XXX: Check error code
-        obj.o = ptr::null_mut(); // sp_set drops it
-    }
-
-    // XXX: Make sure self.db == dbobject.db
-    pub fn get<'a, 'b>(&'a self, pattern: DbObject<'b>) -> Option<DbResultObject<'a>> {
-        unsafe {
-            let res = ffi::sp_get(self.db, pattern.o);
-            if res.is_null() {
-                return None;
-            }
-            let n = DbResultObject {
-                o: pattern.o,
-                phantom: PhantomData
-            };
-            let mut pattern = pattern;
-            pattern.o = ptr::null_mut(); 
-            return Some(n);
-        }
-    }
-
     pub fn iter_all(&mut self) -> Cursor {
         unsafe {
             let obj = ffi::sp_object(self.db);
@@ -341,4 +328,8 @@ impl Db {
         }
     }
     */
+}
+
+impl SetGetOps for Db {
+    fn backend(&self) -> ffi::Voidptr { self.db }
 }

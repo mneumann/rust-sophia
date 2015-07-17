@@ -8,6 +8,7 @@ use std::thread;
 const N_KEYS: usize = 100_000_000;
 const REPEAT: usize = 10_000_000;
 
+use sophia::SetGetOps;
 
 fn write_keys(db: &mut sophia::Db) {
     for i in 0 .. N_KEYS {
