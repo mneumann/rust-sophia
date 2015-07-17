@@ -43,12 +43,12 @@ macro_rules! obj {
 
 
 #[derive(Debug)]
-pub struct DbObject<'a> {
+pub struct Object<'a> {
     o: ffi::Voidptr,
     phantom: PhantomData<&'a ()>,
 }
 
-impl<'a> DbObject<'a> {
+impl<'a> Object<'a> {
     // We name it attr(), to not mix it up with the set() method.
     pub fn attr<'b>(&'b mut self, path: &str, data: &'b[u8]) {
         let path = CString::new(path).unwrap();
@@ -87,7 +87,7 @@ impl<'a> DbObject<'a> {
     }
 }
 
-impl<'a> Drop for DbObject<'a> {
+impl<'a> Drop for Object<'a> {
     fn drop(&mut self) {
         if !self.o.is_null() {
             unsafe {ffi::sp_destroy(self.o)};
@@ -96,12 +96,12 @@ impl<'a> Drop for DbObject<'a> {
 }
 
 #[derive(Debug)]
-pub struct DbResultObject<'a> {
+pub struct ResultObject<'a> {
     o: ffi::Voidptr,
     phantom: PhantomData<&'a ()>,
 }
 
-impl<'a> DbResultObject<'a> {
+impl<'a> ResultObject<'a> {
     fn get_<'b>(&'b self, key: &'b [u8]) -> Option<&'b[u8]> {
         unsafe {
             let mut sz = 0;
@@ -130,7 +130,7 @@ impl<'a> DbResultObject<'a> {
     }
 }
 
-impl<'a> Drop for DbResultObject<'a> {
+impl<'a> Drop for ResultObject<'a> {
     fn drop(&mut self) {
         if !self.o.is_null() {
             unsafe {ffi::sp_destroy(self.o)};
@@ -165,13 +165,13 @@ impl<'a> Drop for Cursor<'a> {
 }
 
 impl<'a> Cursor<'a> {
-    pub fn next<'b>(&'b self) -> Option<DbResultObject<'b>> {
+    pub fn next<'b>(&'b self) -> Option<ResultObject<'b>> {
         let res = unsafe { ffi::sp_get(self.obj, ptr::null_mut()) };
         if res.is_null() {
             None
         }
         else {
-            Some(DbResultObject{o: res, phantom: PhantomData})
+            Some(ResultObject{o: res, phantom: PhantomData})
         }
     }
 }
@@ -179,21 +179,21 @@ impl<'a> Cursor<'a> {
 pub trait SetGetOps {
     fn backend(&self) -> ffi::Voidptr;
 
-    // Consumes the DbObject
-    fn set<'a>(&self, obj: DbObject<'a>) {
+    // Consumes the Object
+    fn set<'a>(&self, obj: Object<'a>) {
         let mut obj = obj;
         unsafe {ffi::sp_set(self.backend(), obj.o)}; // XXX: Check error code
         obj.o = ptr::null_mut(); // sp_set drops it
     }
 
     // XXX: Make sure self.db == dbobject.db
-    fn get<'a, 'b>(&'a self, pattern: DbObject<'b>) -> Option<DbResultObject<'a>> {
+    fn get<'a, 'b>(&'a self, pattern: Object<'b>) -> Option<ResultObject<'a>> {
         unsafe {
             let res = ffi::sp_get(self.backend(), pattern.o);
             if res.is_null() {
                 return None;
             }
-            let n = DbResultObject {
+            let n = ResultObject {
                 o: pattern.o,
                 phantom: PhantomData
             };
@@ -203,7 +203,7 @@ pub trait SetGetOps {
         }
     }
 
-    fn cursor<'a, 'b>(&'a self, pattern: DbObject<'b>) -> Cursor<'a> {
+    fn cursor<'a, 'b>(&'a self, pattern: Object<'b>) -> Cursor<'a> {
         unsafe {
             let cursor = ffi::sp_cursor(self.backend(), pattern.o);
             assert!(!cursor.is_null());
@@ -288,10 +288,10 @@ impl SetGetOps for Db {
 }
 
 impl Db {
-    pub fn obj<'a>(&'a self) -> DbObject<'a> {
+    pub fn obj<'a>(&'a self) -> Object<'a> {
         let obj = unsafe { ffi::sp_object(self.db) };
         assert!(!obj.is_null());
-        DbObject{o: obj, phantom: PhantomData} 
+        Object{o: obj, phantom: PhantomData} 
     }
 
 }
