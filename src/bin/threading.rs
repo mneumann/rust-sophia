@@ -10,16 +10,17 @@ const REPEAT: usize = 10_000_000;
 
 use sophia::SetGetOps;
 
-fn write_keys(db: &mut sophia::Db) {
+fn write_keys(env: &sophia::Env, db: &sophia::Db) {
     for i in 0 .. N_KEYS {
         let k = format!("{}", i);
         let s = k.as_bytes();
 
-        db.set(obj!(db, key => s, value => s));
+        let obj = obj!(db, key => s, value => s);
+        env.set(obj);
     }
 }
 
-fn read_keys(db: &mut sophia::Db) {
+fn read_keys(env: &sophia::Env, db: &sophia::Db) {
     use rand::Rng;
     let mut rng = rand::thread_rng();
 
@@ -27,10 +28,9 @@ fn read_keys(db: &mut sophia::Db) {
         let i: usize = rng.gen();
         let key = format!("{}", i % N_KEYS);
 
-        let mut obj = db.obj();
-        obj.key(key.as_bytes());
+        let obj = obj!(db, key => key.as_bytes());
 
-        let kv = db.get(obj).unwrap();
+        let kv = env.get(obj).unwrap();
         match kv.get_value() {
             Some(val) => {
                 if let Ok(val) = str::from_utf8(val) {
@@ -54,7 +54,7 @@ fn main() {
 
     let mut db = env.get_db("test").unwrap();
 
-    write_keys(&mut db);
+    write_keys(&env, &db);
 
     println!("starting up...");
 
@@ -62,8 +62,7 @@ fn main() {
 
     for i in 1..10 {
         let child = thread::spawn(move || {
-            let mut mydb = db.clone();
-            read_keys(&mut mydb);
+            read_keys(&env, &db);
         });
         vec.push(child);
     }

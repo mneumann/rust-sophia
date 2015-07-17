@@ -232,6 +232,10 @@ impl Env {
     }
 }
 
+impl SetGetOps for Env {
+    fn backend(&self) -> ffi::Voidptr { self.env }
+}
+
 pub struct Cursor {
     obj: ffi::Voidptr,
 }
@@ -315,6 +319,4 @@ impl Db {
     }
 }
 
-impl SetGetOps for Db {
-    fn backend(&self) -> ffi::Voidptr { self.db }
-}
+
