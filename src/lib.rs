@@ -4,6 +4,7 @@ extern crate libc;
 use std::ffi::CString;
 use std::slice;
 use std::ptr;
+use std::iter::Iterator;
 
 mod ffi;
 
@@ -164,8 +165,9 @@ impl<'a> Drop for Cursor<'a> {
     }
 }
 
-impl<'a> Cursor<'a> {
-    pub fn next<'b>(&'b self) -> Option<ResultObject<'b>> {
+impl<'a> Iterator for Cursor<'a> {
+    type Item = ResultObject<'a>;
+    fn next(&mut self) -> Option<Self::Item> {
         let res = unsafe { ffi::sp_get(self.obj, ptr::null_mut()) };
         if res.is_null() {
             None
