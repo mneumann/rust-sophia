@@ -60,6 +60,12 @@ impl<'a> DbObject<'a> {
         unsafe {ffi::setstring(self.o, "key\0".as_bytes(), data); }
     }
 
+    // Shortcut for attr("key_b", ...)
+    // This allows setting a secondary key.
+    pub fn key_b<'b>(&'b mut self, data: &'b[u8]) {
+        unsafe {ffi::setstring(self.o, "key_b\0".as_bytes(), data); }
+    }
+
     // Shortcut for attr("value", ...)
     pub fn value<'b>(&'b mut self, data: &'b[u8]) {
         unsafe {ffi::setstring(self.o, "value\0".as_bytes(), data); }
@@ -117,6 +123,10 @@ impl<'a> DbResultObject<'a> {
 
     pub fn get_key<'b>(&'b self) -> Option<&'b[u8]> {
         self.get_(b"key\0")
+    }
+
+    pub fn get_key_b<'b>(&'b self) -> Option<&'b[u8]> {
+        self.get_(b"key_b\0")
     }
 }
 
