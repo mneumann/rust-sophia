@@ -28,7 +28,7 @@ use std::marker::PhantomData;
 #[macro_export]
 macro_rules! obj {
     (
-        $db:ident,
+        $db:ident ;
         $(
             $name:ident => $x:expr
         ),*
