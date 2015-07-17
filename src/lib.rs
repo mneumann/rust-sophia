@@ -30,16 +30,17 @@ macro_rules! obj {
     (
         $db:ident ;
         $(
-            $name:ident => $x:expr
+            $name:ident : $x:expr
         ),*
     ) => {{
         let mut obj = $db.obj(); 
         $(
             obj.$name($x)
-        );* ;
-        obj
+        );*
+        ;obj
     }}
 }
+
 
 #[derive(Debug)]
 pub struct DbObject<'a> {
@@ -62,6 +63,11 @@ impl<'a> DbObject<'a> {
     // Shortcut for attr("value", ...)
     pub fn value<'b>(&'b mut self, data: &'b[u8]) {
         unsafe {ffi::setstring(self.o, "value\0".as_bytes(), data); }
+    }
+
+    // Shortcut for attr("val", ...)
+    pub fn val<'b>(&'b mut self, data: &'b[u8]) {
+        self.value(data)
     }
 
     pub fn get_value<'b>(&'b self) -> Option<&'b[u8]> {

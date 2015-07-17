@@ -1,4 +1,4 @@
-#[macro_use(obj)]
+#[macro_use]
 extern crate sophia;
 extern crate rand;
 
@@ -15,7 +15,7 @@ fn write_keys(env: &sophia::Env, db: &sophia::Db) {
         let k = format!("{}", i);
         let s = k.as_bytes();
 
-        let obj = obj![db; key => s, value => s];
+        let obj = obj![db; key:s, val:s];
         env.set(obj);
     }
 }
@@ -28,7 +28,7 @@ fn read_keys(env: &sophia::Env, db: &sophia::Db) {
         let i: usize = rng.gen();
         let key = format!("{}", i % N_KEYS);
 
-        let obj = obj![db; key => key.as_bytes()];
+        let obj = obj![db; key : key.as_bytes()];
 
         let kv = env.get(obj).unwrap();
         match kv.get_value() {
